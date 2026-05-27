@@ -6,6 +6,7 @@ from fpdf import FPDF
 from openai import OpenAI
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
+import speech_recognition as sr
 
 # =========================================
 # PAGE CONFIG
@@ -18,7 +19,7 @@ st.set_page_config(
 )
 
 # =========================================
-# API KEYS
+# DEEPSEEK API KEY
 # =========================================
 
 try:
@@ -26,32 +27,17 @@ try:
 except Exception:
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-try:
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-except Exception:
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 if not DEEPSEEK_API_KEY:
     st.error("DeepSeek API Key not configured")
     st.stop()
 
-if not OPENAI_API_KEY:
-    st.error("OpenAI API Key not configured")
-    st.stop()
-
 # =========================================
-# CLIENTS
+# DEEPSEEK CLIENT
 # =========================================
 
-# DeepSeek Client
 deepseek_client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com"
-)
-
-# OpenAI Client (Whisper)
-openai_client = OpenAI(
-    api_key=OPENAI_API_KEY
 )
 
 # =========================================
@@ -78,7 +64,7 @@ def convert_webm_to_wav(webm_bytes):
 
         webm_path = webm_file.name
 
-    # CONVERT WEBM -> WAV
+    # CONVERT TO WAV
 
     audio = AudioSegment.from_file(
         webm_path,
@@ -100,14 +86,18 @@ def convert_webm_to_wav(webm_bytes):
 
 def transcribe_audio(audio_path):
 
-    with open(audio_path, "rb") as audio_file:
+    recognizer = sr.Recognizer()
 
-        transcript = openai_client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
+    with sr.AudioFile(audio_path) as source:
 
-    return transcript.text
+        audio_data = recognizer.record(source)
+
+    text = recognizer.recognize_google(
+        audio_data,
+        language="id-ID"
+    )
+
+    return text
 
 
 def analyze_meeting(transcript):
@@ -251,7 +241,7 @@ if page == "Dashboard":
     )
 
     st.info(
-        "Record or upload meeting audio to generate AI-powered insights."
+        "Record or upload meeting audio to generate AI-powered meeting insights."
     )
 
     st.markdown("---")
@@ -261,11 +251,11 @@ if page == "Dashboard":
 
     ✅ Record directly from mobile/device  
     ✅ Upload audio files  
-    ✅ OpenAI Whisper transcription  
+    ✅ Voice to text  
     ✅ DeepSeek AI analysis  
     ✅ Executive summary  
     ✅ Action items extraction  
-    ✅ AI recommendations  
+    ✅ Recommendations  
     ✅ Export PDF  
     ✅ Meeting history  
     """)
@@ -278,9 +268,7 @@ elif page == "Record Meeting":
 
     st.title("🎙️ Record Meeting")
 
-    # =====================================
-    # RECORD SECTION
-    # =====================================
+    # RECORD FROM DEVICE
 
     st.markdown("## Record From Device")
 
@@ -362,7 +350,7 @@ elif page == "Record Meeting":
             # TRANSCRIPTION
             # =====================================
 
-            with st.spinner("Transcribing audio..."):
+            with st.spinner("Converting voice to text..."):
 
                 try:
 
@@ -378,7 +366,7 @@ elif page == "Record Meeting":
 
                     st.stop()
 
-            st.success("Transcription completed")
+            st.success("Voice to text completed")
 
             st.subheader("📝 Transcript")
 
@@ -388,7 +376,7 @@ elif page == "Record Meeting":
             # AI ANALYSIS
             # =====================================
 
-            with st.spinner("Analyzing meeting..."):
+            with st.spinner("Analyzing meeting with DeepSeek AI..."):
 
                 try:
 
@@ -474,7 +462,7 @@ elif page == "History":
                     item["transcript"]
                 )
 
-                st.subheader("🤖 AI Analysis")
+                st.subheader("🤖 Analysis")
 
                 st.write(
                     item["analysis"]
