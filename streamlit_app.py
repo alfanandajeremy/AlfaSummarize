@@ -5,11 +5,11 @@ from datetime import datetime
 from fpdf import FPDF
 from openai import OpenAI
 from streamlit_mic_recorder import mic_recorder
-import speech_recognition as sr
+from pydub import AudioSegment
 
-# =========================
+# =====================================
 # PAGE CONFIG
-# =========================
+# =====================================
 
 st.set_page_config(
     page_title="AI Meeting Recorder",
@@ -17,9 +17,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# =========================
-# API KEY SETUP
-# =========================
+# =====================================
+# API KEY
+# =====================================
 
 try:
     DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
@@ -30,42 +30,36 @@ if not DEEPSEEK_API_KEY:
     st.error("DeepSeek API Key not configured")
     st.stop()
 
-# =========================
-# OPENAI CLIENT (DEEPSEEK)
-# =========================
+# =====================================
+# OPENAI CLIENT
+# =====================================
 
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com"
 )
 
-# =========================
+# =====================================
 # SESSION STATE
-# =========================
+# =====================================
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# =========================
+# =====================================
 # FUNCTIONS
-# =========================
+# =====================================
 
 def transcribe_audio(audio_path):
 
-    recognizer = sr.Recognizer()
+    with open(audio_path, "rb") as audio_file:
 
-    with sr.AudioFile(audio_path) as source:
-        audio_data = recognizer.record(source)
-
-    try:
-        text = recognizer.recognize_google(
-            audio_data,
-            language="id-ID"
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file
         )
-        return text
 
-    except Exception as e:
-        return f"Transcription Error: {str(e)}"
+    return transcript.text
 
 
 def analyze_meeting(transcript):
@@ -74,13 +68,13 @@ def analyze_meeting(transcript):
     Analyze this meeting transcript.
 
     Generate:
-    1. Executive summary
-    2. Key discussion points
-    3. Decisions made
-    4. Action items
-    5. Risks identified
+    1. Executive Summary
+    2. Key Discussion Points
+    3. Decisions Made
+    4. Action Items
+    5. Risks Identified
     6. Recommendations
-    7. Communication insights
+    7. Communication Insights
 
     Transcript:
     {transcript}
@@ -111,9 +105,16 @@ def generate_pdf(title, transcript, analysis):
     pdf.add_page()
 
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt=title, ln=True)
+
+    pdf.cell(
+        200,
+        10,
+        txt=title,
+        ln=True
+    )
 
     pdf.set_font("Arial", size=12)
+
     pdf.cell(
         200,
         10,
@@ -123,19 +124,45 @@ def generate_pdf(title, transcript, analysis):
 
     pdf.ln(10)
 
+    # TRANSCRIPT
+
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(200, 10, txt="Transcript", ln=True)
+
+    pdf.cell(
+        200,
+        10,
+        txt="Transcript",
+        ln=True
+    )
 
     pdf.set_font("Arial", size=11)
-    pdf.multi_cell(0, 8, transcript)
+
+    pdf.multi_cell(
+        0,
+        8,
+        transcript
+    )
 
     pdf.ln(5)
 
+    # ANALYSIS
+
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(200, 10, txt="AI Analysis", ln=True)
+
+    pdf.cell(
+        200,
+        10,
+        txt="AI Analysis",
+        ln=True
+    )
 
     pdf.set_font("Arial", size=11)
-    pdf.multi_cell(0, 8, analysis)
+
+    pdf.multi_cell(
+        0,
+        8,
+        analysis
+    )
 
     filename = "meeting_summary.pdf"
 
@@ -143,9 +170,42 @@ def generate_pdf(title, transcript, analysis):
 
     return filename
 
-# =========================
+
+def convert_webm_to_wav(webm_bytes):
+
+    # SAVE WEBM
+
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".webm"
+    ) as webm_file:
+
+        webm_file.write(webm_bytes)
+
+        webm_path = webm_file.name
+
+    # CONVERT TO WAV
+
+    audio = AudioSegment.from_file(
+        webm_path,
+        format="webm"
+    )
+
+    wav_path = webm_path.replace(
+        ".webm",
+        ".wav"
+    )
+
+    audio.export(
+        wav_path,
+        format="wav"
+    )
+
+    return wav_path
+
+# =====================================
 # SIDEBAR
-# =========================
+# =====================================
 
 st.sidebar.title("AI Meeting Recorder")
 
@@ -158,9 +218,9 @@ page = st.sidebar.radio(
     ]
 )
 
-# =========================
+# =====================================
 # DASHBOARD
-# =========================
+# =====================================
 
 if page == "Dashboard":
 
@@ -172,26 +232,27 @@ if page == "Dashboard":
     )
 
     st.info(
-        "Record or upload meeting audio to generate AI insights."
+        "Record or upload meeting audio to generate AI-powered meeting insights."
     )
 
     st.markdown("---")
 
     st.markdown("""
-    ### Features
+    ## Features
 
-    ✅ Record from mobile/device  
-    ✅ Upload audio  
-    ✅ Speech-to-text  
-    ✅ AI meeting summary  
-    ✅ Action items  
-    ✅ AI recommendations  
+    ✅ Record directly from mobile/device  
+    ✅ Upload audio files  
+    ✅ AI transcription  
+    ✅ Meeting summary  
+    ✅ Action items extraction  
+    ✅ Recommendations  
     ✅ Export PDF  
+    ✅ Meeting history  
     """)
 
-# =========================
+# =====================================
 # RECORD PAGE
-# =========================
+# =====================================
 
 elif page == "Record Meeting":
 
@@ -208,43 +269,53 @@ elif page == "Record Meeting":
 
     temp_audio_path = None
 
-    # =========================
+    # =====================================
     # RECORD RESULT
-    # =========================
+    # =====================================
 
     if audio:
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".wav"
-        ) as f:
+        try:
 
-            f.write(audio["bytes"])
+            temp_audio_path = convert_webm_to_wav(
+                audio["bytes"]
+            )
 
-            temp_audio_path = f.name
+            st.success("Recording completed")
 
-        st.success("Recording completed")
+            st.audio(
+                audio["bytes"]
+            )
 
-        st.audio(temp_audio_path)
+        except Exception as e:
 
-    # =========================
-    # UPLOAD SECTION
-    # =========================
+            st.error(f"Audio conversion error: {str(e)}")
+
+    # =====================================
+    # UPLOAD AUDIO
+    # =====================================
 
     st.divider()
 
     st.markdown("## Upload Existing Audio")
 
     uploaded_file = st.file_uploader(
-        "Upload audio file",
-        type=["wav", "mp3"]
+        "Upload audio",
+        type=[
+            "wav",
+            "mp3",
+            "webm",
+            "m4a"
+        ]
     )
 
     if uploaded_file:
 
+        suffix = "." + uploaded_file.name.split(".")[-1]
+
         with tempfile.NamedTemporaryFile(
             delete=False,
-            suffix=".wav"
+            suffix=suffix
         ) as tmp:
 
             tmp.write(uploaded_file.read())
@@ -253,23 +324,33 @@ elif page == "Record Meeting":
 
         st.audio(temp_audio_path)
 
-    # =========================
+    # =====================================
     # ANALYZE BUTTON
-    # =========================
+    # =====================================
 
     if temp_audio_path:
 
         if st.button("🚀 Analyze Meeting"):
 
-            # =========================
-            # TRANSCRIBE
-            # =========================
+            # =====================================
+            # TRANSCRIPTION
+            # =====================================
 
             with st.spinner("Transcribing audio..."):
 
-                transcript = transcribe_audio(
-                    temp_audio_path
-                )
+                try:
+
+                    transcript = transcribe_audio(
+                        temp_audio_path
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        f"Transcription failed: {str(e)}"
+                    )
+
+                    st.stop()
 
             st.success("Transcription completed")
 
@@ -277,15 +358,25 @@ elif page == "Record Meeting":
 
             st.write(transcript)
 
-            # =========================
+            # =====================================
             # AI ANALYSIS
-            # =========================
+            # =====================================
 
-            with st.spinner("Analyzing with DeepSeek AI..."):
+            with st.spinner("Analyzing meeting..."):
 
-                analysis = analyze_meeting(
-                    transcript
-                )
+                try:
+
+                    analysis = analyze_meeting(
+                        transcript
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        f"AI analysis failed: {str(e)}"
+                    )
+
+                    st.stop()
 
             st.success("AI analysis completed")
 
@@ -293,9 +384,9 @@ elif page == "Record Meeting":
 
             st.write(analysis)
 
-            # =========================
+            # =====================================
             # SAVE HISTORY
-            # =========================
+            # =====================================
 
             meeting_data = {
                 "title": f"Meeting {datetime.now()}",
@@ -308,9 +399,9 @@ elif page == "Record Meeting":
                 meeting_data
             )
 
-            # =========================
+            # =====================================
             # PDF EXPORT
-            # =========================
+            # =====================================
 
             pdf_path = generate_pdf(
                 meeting_data["title"],
@@ -327,9 +418,9 @@ elif page == "Record Meeting":
                     mime="application/pdf"
                 )
 
-# =========================
-# HISTORY PAGE
-# =========================
+# =====================================
+# HISTORY
+# =====================================
 
 elif page == "History":
 
@@ -341,7 +432,9 @@ elif page == "History":
 
     else:
 
-        for item in reversed(st.session_state.history):
+        for item in reversed(
+            st.session_state.history
+        ):
 
             with st.expander(
                 f"{item['title']} - {item['date']}"
@@ -349,8 +442,12 @@ elif page == "History":
 
                 st.subheader("📝 Transcript")
 
-                st.write(item["transcript"])
+                st.write(
+                    item["transcript"]
+                )
 
                 st.subheader("🤖 Analysis")
 
-                st.write(item["analysis"])
+                st.write(
+                    item["analysis"]
+                )
