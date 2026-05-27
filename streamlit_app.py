@@ -15,8 +15,135 @@ import speech_recognition as sr
 st.set_page_config(
     page_title="AI Meeting Recorder",
     page_icon="🎤",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# =========================================
+# MODERN UI CSS
+# =========================================
+
+st.markdown("""
+<style>
+
+/* Hide Streamlit Branding */
+
+#MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+header {
+    visibility: hidden;
+}
+
+/* App Background */
+
+.stApp {
+    background: #0f172a;
+    color: white;
+}
+
+/* Main Container */
+
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 6rem;
+    max-width: 100%;
+}
+
+/* Typography */
+
+h1 {
+    font-size: 34px !important;
+    font-weight: 800 !important;
+    color: white !important;
+}
+
+h2, h3 {
+    color: white !important;
+}
+
+/* Buttons */
+
+.stButton button {
+    width: 100%;
+    border-radius: 16px;
+    height: 52px;
+    border: none;
+    background: linear-gradient(
+        135deg,
+        #2563eb,
+        #7c3aed
+    );
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* Metric Cards */
+
+[data-testid="metric-container"] {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 20px;
+    padding: 20px;
+}
+
+/* Expander */
+
+.streamlit-expanderHeader {
+    background: #1e293b;
+    border-radius: 14px;
+}
+
+/* Inputs */
+
+.stTextInput input {
+    border-radius: 12px;
+}
+
+/* Hero Card */
+
+.hero-card {
+    padding: 28px;
+    border-radius: 24px;
+    background: linear-gradient(
+        135deg,
+        #2563eb,
+        #7c3aed
+    );
+    margin-bottom: 24px;
+}
+
+/* Upload */
+
+[data-testid="stFileUploader"] {
+    background: #1e293b;
+    border-radius: 18px;
+    padding: 20px;
+}
+
+/* Mobile */
+
+@media (max-width: 768px) {
+
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    h1 {
+        font-size: 28px !important;
+    }
+
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # =========================================
 # DEEPSEEK API KEY
@@ -55,7 +182,6 @@ def convert_audio_to_wav(input_path):
 
     audio = AudioSegment.from_file(input_path)
 
-    # Convert ke mono + 16kHz
     audio = audio.set_channels(1)
     audio = audio.set_frame_rate(16000)
 
@@ -136,9 +262,7 @@ def generate_pdf(title, transcript, analysis):
 
     pdf.add_page()
 
-    # TITLE
-
-    pdf.set_font("Arial", "B", 16)
+    pdf.set_font("Arial", "B", 18)
 
     pdf.cell(
         200,
@@ -146,8 +270,6 @@ def generate_pdf(title, transcript, analysis):
         txt=title,
         ln=True
     )
-
-    # DATE
 
     pdf.set_font("Arial", size=12)
 
@@ -160,7 +282,7 @@ def generate_pdf(title, transcript, analysis):
 
     pdf.ln(10)
 
-    # TRANSCRIPT
+    # Transcript
 
     pdf.set_font("Arial", "B", 14)
 
@@ -181,7 +303,7 @@ def generate_pdf(title, transcript, analysis):
 
     pdf.ln(5)
 
-    # ANALYSIS
+    # Analysis
 
     pdf.set_font("Arial", "B", 14)
 
@@ -207,66 +329,72 @@ def generate_pdf(title, transcript, analysis):
     return filename
 
 # =========================================
-# SIDEBAR
+# NAVIGATION
 # =========================================
 
-st.sidebar.title("AI Meeting Recorder")
-
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "Dashboard",
-        "Record Meeting",
-        "History"
-    ]
+page = st.radio(
+    "",
+    ["🏠 Home", "🎙️ Record", "📚 History"],
+    horizontal=True
 )
 
 # =========================================
-# DASHBOARD
+# HOME
 # =========================================
 
-if page == "Dashboard":
+if page == "🏠 Home":
 
-    st.title("🎤 AI Meeting Recorder & Analyzer")
+    st.markdown("""
+    <div class="hero-card">
+        <h1>🎤 AI Meeting Recorder</h1>
+        <p>
+        Record meetings, convert voice to text,
+        analyze conversations with AI,
+        and generate actionable insights.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.metric(
-        "Total Meetings",
-        len(st.session_state.history)
-    )
+    col1, col2 = st.columns(2)
 
-    st.info(
-        "Record or upload meeting audio to generate AI-powered meeting insights."
-    )
+    with col1:
+
+        st.metric(
+            "Meetings",
+            len(st.session_state.history)
+        )
+
+    with col2:
+
+        st.metric(
+            "AI Status",
+            "Active"
+        )
 
     st.markdown("---")
 
-    st.markdown("""
-    ## Features
+    st.subheader("Features")
 
-    ✅ Record directly from mobile/device  
-    ✅ Upload audio files  
+    st.markdown("""
+    ✅ Mobile recording  
+    ✅ Upload audio  
     ✅ Voice to text  
-    ✅ DeepSeek AI analysis  
-    ✅ Executive summary  
+    ✅ AI meeting summary  
     ✅ Action items extraction  
     ✅ Recommendations  
     ✅ Export PDF  
-    ✅ Meeting history  
+    ✅ Mobile-first UI  
     """)
 
 # =========================================
 # RECORD PAGE
 # =========================================
 
-elif page == "Record Meeting":
+elif page == "🎙️ Record":
 
     st.title("🎙️ Record Meeting")
 
-    # =====================================
-    # RECORD FROM DEVICE
-    # =====================================
-
-    st.markdown("## Record From Device")
+    st.markdown("### Record from mobile/device")
 
     audio = mic_recorder(
         start_prompt="▶️ Start Recording",
@@ -278,14 +406,12 @@ elif page == "Record Meeting":
     temp_audio_path = None
 
     # =====================================
-    # HANDLE RECORDED AUDIO
+    # RECORDED AUDIO
     # =====================================
 
     if audio:
 
         try:
-
-            # SAVE WEBM
 
             with tempfile.NamedTemporaryFile(
                 delete=False,
@@ -295,8 +421,6 @@ elif page == "Record Meeting":
                 f.write(audio["bytes"])
 
                 webm_path = f.name
-
-            # CONVERT TO WAV
 
             temp_audio_path = convert_audio_to_wav(
                 webm_path
@@ -313,12 +437,12 @@ elif page == "Record Meeting":
             )
 
     # =====================================
-    # UPLOAD AUDIO
+    # FILE UPLOAD
     # =====================================
 
-    st.divider()
+    st.markdown("---")
 
-    st.markdown("## Upload Existing Audio")
+    st.markdown("### Upload Existing Audio")
 
     uploaded_file = st.file_uploader(
         "Upload audio file",
@@ -358,16 +482,12 @@ elif page == "Record Meeting":
             )
 
     # =====================================
-    # ANALYZE BUTTON
+    # ANALYZE
     # =====================================
 
     if temp_audio_path:
 
         if st.button("🚀 Analyze Meeting"):
-
-            # =====================================
-            # TRANSCRIPTION
-            # =====================================
 
             with st.spinner("Converting voice to text..."):
 
@@ -433,7 +553,7 @@ elif page == "Record Meeting":
             )
 
             # =====================================
-            # GENERATE PDF
+            # PDF
             # =====================================
 
             pdf_path = generate_pdf(
@@ -455,13 +575,15 @@ elif page == "Record Meeting":
 # HISTORY
 # =========================================
 
-elif page == "History":
+elif page == "📚 History":
 
     st.title("📚 Meeting History")
 
     if len(st.session_state.history) == 0:
 
-        st.warning("No meeting history found.")
+        st.warning(
+            "No meeting history found."
+        )
 
     else:
 
@@ -479,7 +601,7 @@ elif page == "History":
                     item["transcript"]
                 )
 
-                st.subheader("🤖 Analysis")
+                st.subheader("🤖 AI Analysis")
 
                 st.write(
                     item["analysis"]
