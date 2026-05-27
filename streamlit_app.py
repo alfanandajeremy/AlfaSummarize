@@ -7,9 +7,9 @@ from openai import OpenAI
 from streamlit_mic_recorder import mic_recorder
 from pydub import AudioSegment
 
-# =====================================
+# =========================================
 # PAGE CONFIG
-# =====================================
+# =========================================
 
 st.set_page_config(
     page_title="AI Meeting Recorder",
@@ -17,44 +17,92 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================
-# API KEY
-# =====================================
+# =========================================
+# API KEYS
+# =========================================
 
 try:
     DEEPSEEK_API_KEY = st.secrets["DEEPSEEK_API_KEY"]
 except Exception:
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except Exception:
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 if not DEEPSEEK_API_KEY:
     st.error("DeepSeek API Key not configured")
     st.stop()
 
-# =====================================
-# OPENAI CLIENT
-# =====================================
+if not OPENAI_API_KEY:
+    st.error("OpenAI API Key not configured")
+    st.stop()
 
-client = OpenAI(
+# =========================================
+# CLIENTS
+# =========================================
+
+# DeepSeek Client
+deepseek_client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com"
 )
 
-# =====================================
+# OpenAI Client (Whisper)
+openai_client = OpenAI(
+    api_key=OPENAI_API_KEY
+)
+
+# =========================================
 # SESSION STATE
-# =====================================
+# =========================================
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# =====================================
+# =========================================
 # FUNCTIONS
-# =====================================
+# =========================================
+
+def convert_webm_to_wav(webm_bytes):
+
+    # SAVE WEBM
+
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".webm"
+    ) as webm_file:
+
+        webm_file.write(webm_bytes)
+
+        webm_path = webm_file.name
+
+    # CONVERT WEBM -> WAV
+
+    audio = AudioSegment.from_file(
+        webm_path,
+        format="webm"
+    )
+
+    wav_path = webm_path.replace(
+        ".webm",
+        ".wav"
+    )
+
+    audio.export(
+        wav_path,
+        format="wav"
+    )
+
+    return wav_path
+
 
 def transcribe_audio(audio_path):
 
     with open(audio_path, "rb") as audio_file:
 
-        transcript = client.audio.transcriptions.create(
+        transcript = openai_client.audio.transcriptions.create(
             model="whisper-1",
             file=audio_file
         )
@@ -80,7 +128,7 @@ def analyze_meeting(transcript):
     {transcript}
     """
 
-    response = client.chat.completions.create(
+    response = deepseek_client.chat.completions.create(
         model="deepseek-chat",
         messages=[
             {
@@ -104,6 +152,8 @@ def generate_pdf(title, transcript, analysis):
 
     pdf.add_page()
 
+    # TITLE
+
     pdf.set_font("Arial", "B", 16)
 
     pdf.cell(
@@ -112,6 +162,8 @@ def generate_pdf(title, transcript, analysis):
         txt=title,
         ln=True
     )
+
+    # DATE
 
     pdf.set_font("Arial", size=12)
 
@@ -170,42 +222,9 @@ def generate_pdf(title, transcript, analysis):
 
     return filename
 
-
-def convert_webm_to_wav(webm_bytes):
-
-    # SAVE WEBM
-
-    with tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=".webm"
-    ) as webm_file:
-
-        webm_file.write(webm_bytes)
-
-        webm_path = webm_file.name
-
-    # CONVERT TO WAV
-
-    audio = AudioSegment.from_file(
-        webm_path,
-        format="webm"
-    )
-
-    wav_path = webm_path.replace(
-        ".webm",
-        ".wav"
-    )
-
-    audio.export(
-        wav_path,
-        format="wav"
-    )
-
-    return wav_path
-
-# =====================================
+# =========================================
 # SIDEBAR
-# =====================================
+# =========================================
 
 st.sidebar.title("AI Meeting Recorder")
 
@@ -218,9 +237,9 @@ page = st.sidebar.radio(
     ]
 )
 
-# =====================================
+# =========================================
 # DASHBOARD
-# =====================================
+# =========================================
 
 if page == "Dashboard":
 
@@ -232,7 +251,7 @@ if page == "Dashboard":
     )
 
     st.info(
-        "Record or upload meeting audio to generate AI-powered meeting insights."
+        "Record or upload meeting audio to generate AI-powered insights."
     )
 
     st.markdown("---")
@@ -242,21 +261,26 @@ if page == "Dashboard":
 
     ✅ Record directly from mobile/device  
     ✅ Upload audio files  
-    ✅ AI transcription  
-    ✅ Meeting summary  
+    ✅ OpenAI Whisper transcription  
+    ✅ DeepSeek AI analysis  
+    ✅ Executive summary  
     ✅ Action items extraction  
-    ✅ Recommendations  
+    ✅ AI recommendations  
     ✅ Export PDF  
     ✅ Meeting history  
     """)
 
-# =====================================
+# =========================================
 # RECORD PAGE
-# =====================================
+# =========================================
 
 elif page == "Record Meeting":
 
     st.title("🎙️ Record Meeting")
+
+    # =====================================
+    # RECORD SECTION
+    # =====================================
 
     st.markdown("## Record From Device")
 
@@ -289,10 +313,12 @@ elif page == "Record Meeting":
 
         except Exception as e:
 
-            st.error(f"Audio conversion error: {str(e)}")
+            st.error(
+                f"Audio conversion failed: {str(e)}"
+            )
 
     # =====================================
-    # UPLOAD AUDIO
+    # UPLOAD SECTION
     # =====================================
 
     st.divider()
@@ -300,7 +326,7 @@ elif page == "Record Meeting":
     st.markdown("## Upload Existing Audio")
 
     uploaded_file = st.file_uploader(
-        "Upload audio",
+        "Upload audio file",
         type=[
             "wav",
             "mp3",
@@ -418,9 +444,9 @@ elif page == "Record Meeting":
                     mime="application/pdf"
                 )
 
-# =====================================
+# =========================================
 # HISTORY
-# =====================================
+# =========================================
 
 elif page == "History":
 
@@ -428,7 +454,9 @@ elif page == "History":
 
     if len(st.session_state.history) == 0:
 
-        st.warning("No meeting history found.")
+        st.warning(
+            "No meeting history found."
+        )
 
     else:
 
@@ -446,7 +474,7 @@ elif page == "History":
                     item["transcript"]
                 )
 
-                st.subheader("🤖 Analysis")
+                st.subheader("🤖 AI Analysis")
 
                 st.write(
                     item["analysis"]
