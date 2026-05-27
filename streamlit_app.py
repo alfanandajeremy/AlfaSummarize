@@ -48,33 +48,18 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 # =========================================
-# FUNCTIONS
+# AUDIO CONVERTER
 # =========================================
 
-def convert_webm_to_wav(webm_bytes):
+def convert_audio_to_wav(input_path):
 
-    # SAVE WEBM
+    audio = AudioSegment.from_file(input_path)
 
-    with tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=".webm"
-    ) as webm_file:
+    # Convert ke mono + 16kHz
+    audio = audio.set_channels(1)
+    audio = audio.set_frame_rate(16000)
 
-        webm_file.write(webm_bytes)
-
-        webm_path = webm_file.name
-
-    # CONVERT TO WAV
-
-    audio = AudioSegment.from_file(
-        webm_path,
-        format="webm"
-    )
-
-    wav_path = webm_path.replace(
-        ".webm",
-        ".wav"
-    )
+    wav_path = input_path + ".wav"
 
     audio.export(
         wav_path,
@@ -83,6 +68,9 @@ def convert_webm_to_wav(webm_bytes):
 
     return wav_path
 
+# =========================================
+# TRANSCRIPTION
+# =========================================
 
 def transcribe_audio(audio_path):
 
@@ -99,6 +87,9 @@ def transcribe_audio(audio_path):
 
     return text
 
+# =========================================
+# AI ANALYSIS
+# =========================================
 
 def analyze_meeting(transcript):
 
@@ -135,6 +126,9 @@ def analyze_meeting(transcript):
 
     return response.choices[0].message.content
 
+# =========================================
+# PDF GENERATOR
+# =========================================
 
 def generate_pdf(title, transcript, analysis):
 
@@ -268,7 +262,9 @@ elif page == "Record Meeting":
 
     st.title("🎙️ Record Meeting")
 
+    # =====================================
     # RECORD FROM DEVICE
+    # =====================================
 
     st.markdown("## Record From Device")
 
@@ -282,22 +278,33 @@ elif page == "Record Meeting":
     temp_audio_path = None
 
     # =====================================
-    # RECORD RESULT
+    # HANDLE RECORDED AUDIO
     # =====================================
 
     if audio:
 
         try:
 
-            temp_audio_path = convert_webm_to_wav(
-                audio["bytes"]
+            # SAVE WEBM
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".webm"
+            ) as f:
+
+                f.write(audio["bytes"])
+
+                webm_path = f.name
+
+            # CONVERT TO WAV
+
+            temp_audio_path = convert_audio_to_wav(
+                webm_path
             )
 
             st.success("Recording completed")
 
-            st.audio(
-                audio["bytes"]
-            )
+            st.audio(audio["bytes"])
 
         except Exception as e:
 
@@ -306,7 +313,7 @@ elif page == "Record Meeting":
             )
 
     # =====================================
-    # UPLOAD SECTION
+    # UPLOAD AUDIO
     # =====================================
 
     st.divider()
@@ -325,18 +332,30 @@ elif page == "Record Meeting":
 
     if uploaded_file:
 
-        suffix = "." + uploaded_file.name.split(".")[-1]
+        try:
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=suffix
-        ) as tmp:
+            suffix = "." + uploaded_file.name.split(".")[-1]
 
-            tmp.write(uploaded_file.read())
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=suffix
+            ) as tmp:
 
-            temp_audio_path = tmp.name
+                tmp.write(uploaded_file.read())
 
-        st.audio(temp_audio_path)
+                original_path = tmp.name
+
+            temp_audio_path = convert_audio_to_wav(
+                original_path
+            )
+
+            st.audio(original_path)
+
+        except Exception as e:
+
+            st.error(
+                f"Upload conversion failed: {str(e)}"
+            )
 
     # =====================================
     # ANALYZE BUTTON
@@ -376,7 +395,7 @@ elif page == "Record Meeting":
             # AI ANALYSIS
             # =====================================
 
-            with st.spinner("Analyzing meeting with DeepSeek AI..."):
+            with st.spinner("Analyzing with DeepSeek AI..."):
 
                 try:
 
@@ -414,7 +433,7 @@ elif page == "Record Meeting":
             )
 
             # =====================================
-            # PDF EXPORT
+            # GENERATE PDF
             # =====================================
 
             pdf_path = generate_pdf(
@@ -442,9 +461,7 @@ elif page == "History":
 
     if len(st.session_state.history) == 0:
 
-        st.warning(
-            "No meeting history found."
-        )
+        st.warning("No meeting history found.")
 
     else:
 
